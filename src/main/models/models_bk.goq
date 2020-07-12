@@ -1,0 +1,80 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
+)
+
+type User struct {
+	gorm.Model
+	Email    string
+	Name     string
+	Phone    int64
+	Password string
+}
+
+type DBClient struct {
+	DB   *gorm.DB
+	Type string
+	URL  string
+}
+
+func (c *DBClient) Connect() {
+	db, err := gorm.Open(c.Type, c.URL)
+	if err != nil {
+		panic("failed to connect database")
+	}
+	c.DB = db
+}
+
+func (c *DBClient) Close() {
+	c.DB.Close()
+}
+
+func (c *DBClient) Authenticate(email string, password string) *User {
+	var user User
+	c.DB.First(&user, "email = ?", email)
+	if user.Email == "" {
+		return nil
+	}
+	if user.Password == password {
+		return &user
+	} else {
+		return nil
+	}
+}
+
+func main() {
+	client := DBClient{
+		Type: "sqlite3",
+		URL:  "test.db",
+	}
+	client.Connect()
+	defer client.Close()
+
+	// Migrate the schema
+	client.DB.AutoMigrate(&User{})
+
+	// Create
+	// client.DB.Create(&User{Email: "ankush32112@gmail.com", Password: "admin@123", Phone: 7985006375})
+
+	// Read
+	var user User
+	// // client.DB.First(&product, 1)                   // find product with id 1
+	client.DB.First(&user, "email = ?", "ankush32112@gmail.com")
+	fmt.Println(user)
+	r := client.Authenticate("ankush32112@gmail.com", "admin@123")
+	fmt.Println(r)
+	// if product.Code == "" {
+	// 	fmt.Println("nil")
+	// } else {
+	// 	fmt.Println("has value")
+	// }
+	// Update - update product's price to 2000
+	// client.DB.Model(&user).Update("Name", "Ankush")
+
+	// Delete - delete product
+	// db.Delete(&product)
+}
