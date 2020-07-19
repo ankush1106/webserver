@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/ank1106/webserver/src/main/models"
 )
@@ -65,16 +68,21 @@ type Weather struct {
 	Current  Current  `json:"current"`
 }
 
+type Result struct {
+	Data    []Data `json:"data"`
+	HasNext bool   `json:"has_next"`
+}
+type Data struct {
+	Completed bool   `json:"completed"`
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	UserID    int    `json:"userId"`
+}
+
 func (c *Controllers) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	// w.Write([]byte("<h1>Hello World!</h1>"))
 	var tpl = template.Must(template.ParseFiles("src/main/templates/dash.html"))
 	if r.Method == http.MethodGet {
-		// cookie, err := r.Cookie("test")
-		// if err != nil {
-		// 	fmt.Printf("Cant find cookie :/\r\n")
-		// } else {
-		// 	fmt.Println(cookie)
-		// }
 		apiKey := "86490556399f5194031fd81d53004ccb"
 		endpoint := fmt.Sprintf("http://api.weatherstack.com/current/?access_key=%s&query=india", apiKey)
 		resp, err := http.Get(endpoint)
@@ -99,7 +107,7 @@ func (c *Controllers) IndexHandler(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	// tpl.Execute(w, nil)
+	tpl.Execute(w, nil)
 
 }
 
@@ -143,4 +151,71 @@ func (c *Controllers) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	}
 	tpl.Execute(w, nil)
+}
+
+func (c *Controllers) GeTODOs(w http.ResponseWriter, r *http.Request) {
+
+	baseURL := "http://localhost:3001/todos"
+	ch := make(chan Result)
+	var wg sync.WaitGroup
+	totalPages := 20
+	for x := 1; x <= totalPages; x++ {
+		wg.Add(1)
+		url := fmt.Sprintf(baseURL+"?page=%d", x)
+		go callURL(url, ch, &wg)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for msg := range ch {
+
+		for _, todo := range msg.Data {
+			fmt.Println(todo)
+
+		}
+	}
+	w.Write([]byte("<h1>Successful</h1>"))
+
+}
+
+func callURL(url string, c chan Result, wg *sync.WaitGroup) {
+	defer (*wg).Done()
+
+	spaceClient := http.Client{
+		Timeout: time.Second * 2, // Timeout after 2 seconds
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	req.Header.Set("User-Agent", "spacecount-tutorial")
+
+	res, getErr := spaceClient.Do(req)
+	if getErr != nil {
+		log.Fatal(getErr)
+		c <- Result{}
+	}
+
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		log.Fatal(readErr)
+		c <- Result{}
+	}
+
+	result := Result{}
+	jsonErr := json.Unmarshal(body, &result)
+	if jsonErr != nil {
+		log.Fatal(jsonErr)
+		c <- Result{}
+	}
+	c <- result
 }

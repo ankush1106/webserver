@@ -33,6 +33,7 @@ func (w *WebServer) Run(db *models.DBClient) {
 	mux.HandleFunc("/", cnt.IndexHandler)
 	mux.HandleFunc("/login/", cnt.LoginHandler)
 	mux.HandleFunc("/register/", cnt.RegisterHandler)
+	mux.HandleFunc("/todos/", cnt.GeTODOs)
 	fmt.Println("Server running on " + w.host + ":" + w.port)
 	http.ListenAndServe(w.host+":"+w.port, mux)
 }
